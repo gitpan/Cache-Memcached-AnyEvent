@@ -1,0 +1,20 @@
+Changes
+inc/Module/Install.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
+lib/Cache/Memcached/AnyEvent.pm
+lib/Cache/Memcached/AnyEvent/Hash/Modulo.pm
+lib/Cache/Memcached/AnyEvent/Protocol.pm
+lib/Cache/Memcached/AnyEvent/Protocol/Binary.pm
+lib/Cache/Memcached/AnyEvent/Protocol/Text.pm
+Makefile.PL
+MANIFEST			This list of files
+META.yml
+t/100_commands.t
+t/200_stats.t
+t/lib/Cache/Memcached/AnyEvent/Test.pm
