@@ -1,6 +1,7 @@
 package Cache::Memcached::AnyEvent::Protocol::Binary;
 use strict;
 use base 'Cache::Memcached::AnyEvent::Protocol';
+use bytes;
 use Carp qw(confess);
 use constant HEADER_SIZE => 24;
 use constant HAS_64BIT => do {
@@ -149,31 +150,41 @@ AnyEvent::Handle::register_read_type memcached_bin => sub {
     my %state = ( waiting_header => 1 );
     sub {
         if ($state{waiting_header}) {
-            bytes::length ( $_[0]{rbuf} || '') >= HEADER_SIZE or return;
-            my $header = bytes::substr $_[0]{rbuf}, 0, HEADER_SIZE, "";
-            my ($magic, $opcode, $key_length, $extra_length, $status, $data_type, $total_body_length, $opaque, $cas) = _decode_header($header);
-            $state{magic} = $magic;
-            $state{opcode} = $opcode;
-            $state{key_length} = $key_length;
-            $state{extra_length} = $extra_length;
-            $state{status} = $status;
-            $state{data_type} = $data_type;
-            $state{total_body_length} = $total_body_length;
-            $state{opaque} = $opaque;
-            $state{cas} = $cas;
+            if (! $_[0]{rbuf} || length $_[0]{rbuf} < HEADER_SIZE) {
+                return;
+            }
+            my $header = substr $_[0]{rbuf}, 0, HEADER_SIZE, "";
+            my ($i1, $i2, $i3, $i4, $i5, $i6) = unpack('N6', $header);
+            $state{magic} = $i1 >> 24;
+            $state{opcode} = ($i1 & 0x00ff0000) >> 16;
+            $state{key_length} = $i1 & 0x0000ffff;
+            $state{extra_length} = ($i2 & 0xff000000) >> 24;
+            $state{data_type} = ($i2 & 0x00ff0000) >> 8;
+            $state{status} = $i2 & 0x0000ffff;
+            $state{total_body_length} = $i3;
+            $state{opaque} = $i4;
+
+            if (HAS_64BIT) {
+                $state{cas} = $i5 << 32 + $i6;
+            } else {
+                warn "overflow on CAS" if ($i5 || 0) != 0;
+                $state{cas} = $i6;
+            }
 
             delete $state{waiting_header};
         }
 
         if ($state{total_body_length}) {
-            bytes::length $_[0]{rbuf} >= $state{total_body_length} or return;
+            if (! $_[0]{rbuf} || length $_[0]{rbuf} < $state{total_body_length} ) {
+                return;
+            }
 
-            $state{extra} = bytes::substr $_[0]{rbuf}, 0, $state{extra_length}, '';
-            $state{key} = bytes::substr $_[0]{rbuf}, 0, $state{key_length}, '';
+            $state{extra} = substr $_[0]{rbuf}, 0, $state{extra_length}, '';
+            $state{key} = substr $_[0]{rbuf}, 0, $state{key_length}, '';
 
 
             my $value_len = $state{total_body_length} - ($state{key_length} + $state{extra_length});
-            $state{value} = bytes::substr $_[0]{rbuf}, 0, $value_len, '';
+            $state{value} = substr $_[0]{rbuf}, 0, $value_len, '';
         }
 
         $cb->( \%state );
@@ -188,16 +199,8 @@ sub prepare_handle {
 }
 
 AnyEvent::Handle::register_write_type memcached_bin => sub {
-    my ($self, @args) = @_;
-    return _encode_request(@args);
-};
-
-sub _encode_request {
-    my ( $opcode, $key, $extras, $body, $cas, $data_type, $reserved ) = @_;
-
-    use bytes;
-
-    my $key_length = defined $key ? bytes::length($key) : 0;
+    my ($self, $opcode, $key, $extras, $body, $cas, $data_type, $reserved ) = @_;
+    my $key_length = defined $key ? length($key) : 0;
     # first 4 bytes (long)
     my $i1 = 0;
     $i1 ^= REQ_MAGIC << 24;
@@ -205,13 +208,13 @@ sub _encode_request {
     $i1 ^= $key_length;
 
     # second 4 bytes
-    my $extra_length = defined $extras ? bytes::length($extras) : 0;
+    my $extra_length = defined $extras ? length($extras) : 0;
     my $i2 = 0;
     $i2 ^= $extra_length << 24;
     # $data_type and $reserved are not used currently
 
     # third 4 bytes
-    my $body_length  = defined $body ? bytes::length($body) : 0;
+    my $body_length  = defined $body ? length($body) : 0;
     my $i3 = $body_length + $key_length + $extra_length;
 
     # this is the opaque value, which will be returned with the response
@@ -237,7 +240,7 @@ sub _encode_request {
     }
 
     my $message = pack( 'N6', $i1, $i2, $i3, $i4, $i5, $i6 );
-    if (bytes::length($message) > HEADER_SIZE) {
+    if (length($message) > HEADER_SIZE) {
         confess "header size assertion failed";
     }
 
@@ -253,33 +256,6 @@ sub _encode_request {
 
     return $message;
 };
-
-use constant _noop => _encode_request(MEMD_NOOP, undef, undef, undef, undef, undef, undef);
-
-sub _decode_header {
-    my $header = shift;
-
-    my ($i1, $i2, $i3, $i4, $i5, $i6) = unpack('N6', $header);
-    my $magic = $i1 >> 24;
-    my $opcode = ($i1 & 0x00ff0000) >> 16;
-    my $key_length = $i1 & 0x0000ffff;
-    my $extra_length = ($i2 & 0xff000000) >> 24;
-    my $data_type = ($i2 & 0x00ff0000) >> 8;
-    my $status = $i2 & 0x0000ffff;
-    my $total_body_length = $i3;
-    my $opaque = $i4;
-
-    my $cas;
-    if (HAS_64BIT) {
-        $cas = $i5 << 32;
-        $cas += $i6;
-    } else {
-        warn "overflow on CAS" if ($i5 || 0) != 0;
-        $cas = $i6;
-    }
-
-    return ($magic, $opcode, $key_length, $extra_length, $status, $data_type, $total_body_length, $opaque, $cas);
-}
 
 sub _status_str {
     my $status = shift;
@@ -297,26 +273,20 @@ sub _status_str {
 
 # Generate setters
 {
-    my %bincmd = (
-        add => MEMD_ADD(),
-        replace => MEMD_REPLACE(),
-        set => MEMD_SET(),
-    );
     my $generator = sub {
-        my $cmd = shift;
+        my ($cmd, $opcode) = @_;
 
-        my $bincmd = $bincmd{$cmd};
         sub {
             my ($guard, $self, $memcached, $key, $value, $exptime, $noreply, $cb) = @_;
-            my $fq_key = $self->prepare_key( $key );
-            my $handle = $self->get_handle_for( $fq_key );
+            my $fq_key = $memcached->prepare_key( $key );
+            my $handle = $memcached->get_handle_for( $fq_key );
 
             my ($write_data, $write_len, $flags, $expires) =
-                $self->prepare_value( $cmd, $value, $exptime || 0);
+                $memcached->prepare_value( $cmd, $value, $exptime || 0);
 
             my $extras = pack('N2', $flags, $expires);
 
-            $handle->push_write( memcached_bin => $bincmd, $fq_key, $extras, $write_data );
+            $handle->push_write( memcached_bin => $opcode, $fq_key, $extras, $write_data );
             $handle->push_read( memcached_bin => sub {
                 undef $guard;
                 $cb->($_[0]->{status} == 0, $_[0]->{value}, $_[0]);
@@ -326,17 +296,17 @@ sub _status_str {
 
     sub _build_add_cb {
         my $self = shift;
-        return $generator->("add");
+        return $generator->("add", MEMD_ADD);
     }
 
     sub _build_replace_cb {
         my $self = shift;
-        return $generator->("replace");
+        return $generator->("replace", MEMD_REPLACE);
     }
 
     sub _build_set_cb {
         my $self = shift;
-        return $generator->("set");
+        return $generator->("set", MEMD_SET);
     }
 }
 
@@ -344,8 +314,8 @@ sub _build_delete_cb {
     return sub {
         my ($guard, $self, $memcached, $key, $noreply, $cb) = @_;
 
-        my $fq_key = $self->prepare_key($key);
-        my $handle = $self->get_handle_for($fq_key);
+        my $fq_key = $memcached->prepare_key($key);
+        my $handle = $memcached->get_handle_for($fq_key);
 
         $handle->push_write( memcached_bin => MEMD_DELETE, $fq_key );
         $handle->push_read( memcached_bin => sub {
@@ -363,8 +333,8 @@ sub _build_get_multi_cb {
         my %handle2keys;
             
         foreach my $key (@$keys) {
-            my $fq_key = $self->prepare_key( $key );
-            my $handle = $self->get_handle_for( $fq_key );
+            my $fq_key = $memcached->prepare_key( $key );
+            my $handle = $memcached->get_handle_for( $fq_key );
             my $list = $handle2keys{ $handle };
             if (! $list) {
                 $handle2keys{$handle} = [ $handle, $fq_key ];
@@ -400,15 +370,11 @@ sub _build_get_multi_cb {
 
                     my ($flags, $exptime) = unpack('N2', $msg->{extra});
                     if (exists $msg->{key} && exists $msg->{value}) {
-                        my $key = $self->decode_key($key);
-                        my $value = $self->decode_value( $flags, $msg->{value} );
+                        my ($key, $value) = $memcached->decode_key_value($key, $flags, $msg->{value} );
                         $result{ $key } = $value;
                     }
                     $cv->end;
                 });
-
-                $handle->push_write( _noop() );
-                $handle->push_read( memcached_bin => sub {} );
             }
         }
         $cv->end;
@@ -424,8 +390,8 @@ sub _build_get_multi_cb {
             $value ||= 1;
             my $expires = defined $initial ? 0 : 0xffffffff;
             $initial ||= 0;
-            my $fq_key = $self->prepare_key( $key );
-            my $handle = $self->get_handle_for($fq_key);
+            my $fq_key = $memcached->prepare_key( $key );
+            my $handle = $memcached->get_handle_for($fq_key);
             my $extras;
             if (HAS_64BIT) {
                 $extras = pack('Q2L', $value, $initial, $expires );
@@ -470,7 +436,7 @@ sub _build_version_cb {
             $handle->push_read(memcached_bin => sub {
                 my $msg = shift;
                 undef $guard;
-                my $value = unpack('a', $msg->{value});
+                my $value = unpack('a*', $msg->{value});
 
                 $ret{ $host_port } = $value;
                 $cv->end;
