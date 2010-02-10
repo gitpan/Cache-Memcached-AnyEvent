@@ -12,7 +12,7 @@ use constant +{
     COMPRESS_SAVINGS => 0.20,
 };
 
-our $VERSION = '0.00005';
+our $VERSION = '0.00006';
 
 sub new {
     my $class = shift;
@@ -141,7 +141,7 @@ sub connect {
             undef $guard; # thanks, buddy
             if (! $fh) {
                 # connect failed
-                warn "failed to conncet to $host:$port";
+                warn "failed to connect to $server";
             } else {
                 my $h; $h = AnyEvent::Handle->new(
                     fh => $fh,
@@ -468,6 +468,16 @@ Alias to delete
 =head2 stats($cmd, $cb->(\%stats))
 
 =head2 version($cb->(\%result))
+
+=head1 TODO
+
+=over 4
+
+=item append/prepend are not yet implemented.
+
+=item I couldn't find a binary stats command spec
+
+=back
 
 =head1 AUTHOR
 
