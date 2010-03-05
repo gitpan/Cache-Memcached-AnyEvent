@@ -73,8 +73,11 @@ sub get {
                     undef $guard;
                 } );
             });
+        } elsif ($line =~ /^END$/) {
+            $cb->( undef );
+            undef $guard;
         } else {
-            confess("Unexpected line $line");
+            Carp::confess("Unexpected line $line");
         }
     } );
 }
@@ -122,7 +125,7 @@ sub get_multi {
                     $handle->push_read(line => $code);
                 } );
             } else {
-                confess("Unexpected line $line");
+                Carp::confess("Unexpected line $line");
             }
         };
         $cv->begin;
