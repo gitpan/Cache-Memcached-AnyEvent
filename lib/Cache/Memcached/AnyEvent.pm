@@ -5,6 +5,7 @@ use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Carp;
 use String::CRC32;
+use Storable ();
 
 use constant +{
     HAVE_ZLIB => eval { require Compress::Zlib; 1 },
@@ -13,7 +14,7 @@ use constant +{
     COMPRESS_SAVINGS => 0.20,
 };
 
-our $VERSION = '0.00014';
+our $VERSION = '0.00015';
 
 sub new {
     my $class = shift;
@@ -450,6 +451,7 @@ I was in the mood to implement the binary protocol. I don't believe it's a requi
 =item Unimplemented Methods
 
 get_multi and the like are not implemented yet on L<AnyEvent::Memcached>.
+L<Cache::Memcached::AnyEvent> has them.
 
 =back
 
