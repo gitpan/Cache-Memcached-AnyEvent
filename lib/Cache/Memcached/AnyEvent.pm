@@ -14,7 +14,7 @@ use constant +{
     COMPRESS_SAVINGS => 0.20,
 };
 
-our $VERSION = '0.00015';
+our $VERSION = '0.00016';
 
 sub new {
     my $class = shift;
@@ -170,6 +170,10 @@ sub connect {
         }
 
         $self->{_is_connected} = 1;
+
+        if (my $cb = $self->{ on_connect }) {
+            $cb->($self);
+        }
         $self->drain_queue;
     };
 
@@ -537,6 +541,8 @@ Alias to delete
 =over 4
 
 =item Binary stats is not yet implemented.
+
+=item Other hashing mechanisms. Consistent Hashing (patches welcome)
 
 =back
 
