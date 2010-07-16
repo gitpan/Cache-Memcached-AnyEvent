@@ -30,4 +30,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: git://github.com/lestrrat/Cache-Memcached-AnyEvent.git
-version: 0.00016
+version: 0.00017
