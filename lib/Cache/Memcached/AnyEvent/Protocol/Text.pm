@@ -7,8 +7,8 @@ use base 'Cache::Memcached::AnyEvent::Protocol';
         my $cmd = shift;
         return sub {
             my ($self, $guard, $memcached, $key, $value, $initial, $cb) = @_;
-            my $fq_key = $memcached->prepare_key( $key );
-            my $handle = $memcached->get_handle_for( $fq_key );
+            my $fq_key = $memcached->_prepare_key( $key );
+            my $handle = $memcached->_get_handle_for( $fq_key );
         
             $value ||= 1;
             my @command = ($cmd => $fq_key => $value);
@@ -36,8 +36,8 @@ use base 'Cache::Memcached::AnyEvent::Protocol';
 sub delete {
     my ($self, $guard, $memcached, $key, $noreply, $cb) = @_;
 
-    my $fq_key = $memcached->prepare_key( $key );
-    my $handle = $memcached->get_handle_for( $fq_key );
+    my $fq_key = $memcached->_prepare_key( $key );
+    my $handle = $memcached->_get_handle_for( $fq_key );
 
     my @command = (delete => $fq_key);
     $noreply = 0; # XXX - FIXME
@@ -58,8 +58,8 @@ sub delete {
 sub get {
     my ($self, $guard, $memcached, $key, $cb) = @_;
 
-    my $fq_key = $memcached->prepare_key( $key );
-    my $handle = $memcached->get_handle_for( $fq_key );
+    my $fq_key = $memcached->_prepare_key( $key );
+    my $handle = $memcached->_get_handle_for( $fq_key );
 
     $handle->push_write( "get $fq_key\r\n" );
     $handle->push_read( line => sub {
@@ -67,7 +67,7 @@ sub get {
         if ($line =~ /^VALUE (\S+) (\S+) (\S+)(?: (\S+))?/)  {
             my ($rkey, $rflags, $rsize, $rcas) = ($1, $2, $3, $4);
             $handle->push_read(chunk => $rsize, sub {
-                my ($key, $data) = $memcached->decode_key_value($rkey, $rflags, $_[1]);
+                my ($key, $data) = $memcached->_decode_key_value($rkey, $rflags, $_[1]);
                 $handle->push_read(regex => qr{END\r\n}, cb => sub {
                     $cb->( $data );
                     undef $guard;
@@ -97,8 +97,8 @@ sub get_multi {
     my $count = $memcached->{_active_server_count};
     my %keysinserver;
     foreach my $key (@$keys) {
-        my $fq_key = $memcached->prepare_key( $key );
-        my $handle = $memcached->get_handle_for( $fq_key );
+        my $fq_key = $memcached->_prepare_key( $key );
+        my $handle = $memcached->_get_handle_for( $fq_key );
         my $list = $keysinserver{ $handle };
         if (! $list) {
             $keysinserver{ $handle } = $list = [ $handle, $fq_key ];
@@ -119,7 +119,7 @@ sub get_multi {
             } elsif ($line =~ /^VALUE (\S+) (\S+) (\S+)(?: (\S+))?/)  {
                 my ($rkey, $rflags, $rsize, $rcas) = ($1, $2, $3, $4);
                 $handle->push_read(chunk => $rsize, sub {
-                    my ($key, $data) = $memcached->decode_key_value($rkey, $rflags, $_[1]);
+                    my ($key, $data) = $memcached->_decode_key_value($rkey, $rflags, $_[1]);
                     $rv{ $key } = $data; # XXX whatabout CAS?
                     $handle->push_read(regex => qr{\r\n}, cb => sub { "noop" });
                     $handle->push_read(line => $code);
@@ -139,11 +139,11 @@ sub get_multi {
         my $cmd = shift;
         sub {
             my ($self, $guard, $memcached, $key, $value, $exptime, $noreply, $cb) = @_;
-            my $fq_key = $memcached->prepare_key( $key );
-            my $handle = $memcached->get_handle_for( $fq_key );
+            my $fq_key = $memcached->_prepare_key( $key );
+            my $handle = $memcached->_get_handle_for( $fq_key );
 
             my ($write_data, $write_len, $flags, $expires) =
-                $memcached->prepare_value( $cmd, $value, $exptime );
+                $memcached->_prepare_value( $cmd, $value, $exptime );
             $handle->push_write("$cmd $fq_key $flags $expires $write_len\r\n$write_data\r\n");
             if (! $noreply) {
                 $handle->push_read(regex => qr{^(NOT_)?STORED\r\n}, sub {
@@ -239,5 +239,41 @@ __END__
 =head1 NAME
 
 Cache::Memcached::AnyEvent::Protocol::Text - Implements Memcached Text Protocol
+
+=head1 SYNOPSIS
+
+    use Cache::Memcached::AnyEvent;
+    my $memd = Cache::Memcached::AnyEvent->new({
+        ...
+        protocol_class => 'Text', # Default so you can omit
+    });
+
+=head1 METHODS
+
+=head2 add
+
+=head2 append
+
+=head2 decr
+
+=head2 delete
+
+=head2 flush_all
+
+=head2 get
+
+=head2 get_multi
+
+=head2 incr
+
+=head2 prepend
+
+=head2 replace
+
+=head2 set
+
+=head2 stats
+
+=head2 version
 
 =cut
