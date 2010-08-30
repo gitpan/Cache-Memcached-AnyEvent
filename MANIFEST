@@ -14,16 +14,19 @@ lib/Cache/Memcached/AnyEvent.pm
 lib/Cache/Memcached/AnyEvent/Protocol.pm
 lib/Cache/Memcached/AnyEvent/Protocol/Binary.pm
 lib/Cache/Memcached/AnyEvent/Protocol/Text.pm
+lib/Cache/Memcached/AnyEvent/Selector/Ketama.pm
+lib/Cache/Memcached/AnyEvent/Selector/Traditional.pm
 Makefile.PL
 MANIFEST			This list of files
 META.yml
 README
 t/000_compile.t
-t/lib/Cache/Memcached/AnyEvent/Test.pm
+t/Cache/Memcached/AnyEvent/Test.pm
+t/CMAETest/Commands.pm
+t/CMAETest/ConnectFail.pm
+t/CMAETest/CV.pm
+t/CMAETest/Dorman.pm
+t/CMAETest/Stats.pm
 t/run.t
-t/run/100_commands.ts
-t/run/101_connect_fail.ts
-t/run/102_cv.ts
-t/run/200_stats.ts
 xt/99_pod-coverage.t
 xt/99_pod.t
