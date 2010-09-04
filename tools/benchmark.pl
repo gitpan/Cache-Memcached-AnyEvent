@@ -1,8 +1,8 @@
 use strict;
+use blib;
 use Cache::Memcached;
 use Cache::Memcached::Fast;
 use Cache::Memcached::AnyEvent;
-# use AnyEvent::Memcached;
 use Data::Dumper;
 use Benchmark qw(cmpthese);
 
@@ -21,7 +21,19 @@ Cache::Memcached::AnyEvent Benchmark
 
 EOM
 
-my @servers = split /,/, $ENV{MEMCACHED_SERVERS} || '127.0.0.1:11211,127.0.0.1:11212,127.0.0.1:11213';
+my @guards;
+my @servers;
+if ($ENV{MEMCACHED_SERVERS}) {
+    @servers = split /,/, $ENV{MEMCACHED_SERVERS};
+} else {
+    require Test::Memcached;
+    for (1..5) {
+        my $memd = Test::Memcached->new();
+        $memd->start();
+        push @guards, $memd;
+        push @servers, join(':', '127.0.0.1', $memd->option('tcp_port') );
+    }
+}
 
 my %args = (
     servers => \@servers,
@@ -30,6 +42,9 @@ my %args = (
 my $memd = Cache::Memcached->new(\%args);
 my $memd_fast = Cache::Memcached::Fast->new(\%args);
 my $memd_anyevent = Cache::Memcached::AnyEvent->new(\%args);
+my $memd_anyevent_ketama = Cache::Memcached::AnyEvent->new({ %args,
+    selector_class => 'Ketama'
+});
 my $memd_anyevent_bin = Cache::Memcached::AnyEvent->new({ %args,
     protocol_class => 'Binary',
 });
@@ -47,7 +62,7 @@ EOM
 my @keys = ('a'..'z');
 $memd->set($_ => $_ x 2) for (@keys);
 use Data::Dumper;
-cmpthese(100 => {
+cmpthese(-1 => {
     memd          => sub {
         for (1..100) {
             my $values = $memd->get_multi(@keys);
@@ -63,6 +78,17 @@ cmpthese(100 => {
         for (1..100) {
             $cv->begin;
             $memd_anyevent->get_multi(\@keys, sub {
+                my $values = shift;
+                $cv->end;
+            } );
+        }
+        $cv->recv;
+    },
+    memd_anyevent_ketama => sub {
+        my $cv = AE::cv;
+        for (1..100) {
+            $cv->begin;
+            $memd_anyevent_ketama->get_multi(\@keys, sub {
                 my $values = shift;
                 $cv->end;
             } );

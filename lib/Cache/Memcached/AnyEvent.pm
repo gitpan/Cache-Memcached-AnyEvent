@@ -11,7 +11,6 @@ use AnyEvent;
 use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Carp;
-use String::CRC32;
 use Storable ();
 
 use constant +{
@@ -21,7 +20,7 @@ use constant +{
     COMPRESS_SAVINGS => 0.20,
 };
 
-our $VERSION = '0.00018_02';
+our $VERSION = '0.00018_03';
 
 sub new {
     my $class = shift;
@@ -31,7 +30,7 @@ sub new {
     my $selector_class = delete $args{selector_class} || 'Traditional';
     my $self  = bless {
         auto_reconnect => 5,
-        compess_threshold => 10_000,
+        compress_threshold => 10_000,
         protocol => undef,
         reconnect_delay => 5,
         servers => undef,
@@ -118,54 +117,58 @@ sub _connect_one {
     $port ||= 11211;
 
     $self->{_is_connecting}->{$server} = tcp_connect $host, $port, sub {
-        my ($fh, $host, $port) = @_;
-
-        delete $self->{_is_connecting}->{$server}; # thanks, buddy
-        if (! $fh) {
-            # connect failed
-            warn "failed to connect to $server";
-
-            if ($self->{auto_reconnect} > $self->{_connect_attempts}->{ $server }++) {
-                # XXX this watcher holds a reference to $self, which means
-                # it will make your program wait for it to fire until 
-                # auto_reconnect attempts have been made. 
-                # if you need to close immediately, you need to call disconnect
-                $self->{_reconnect}->{$server} = AE::timer $self->{reconnect_delay}, 0, sub {
-                    delete $self->{_reconnect}->{$server};
-                    $self->_connect_one($server);
-                };
-            }
-        } else {
-            my $h; $h = AnyEvent::Handle->new(
-                fh => $fh,
-                on_drain => sub {
-                    my $h = shift;
-                    if (defined $h->{wbuf} && $h->{wbuf} eq "") {
-                        delete $h->{wbuf}; $h->{wbuf} = "";
-                    }
-                    if (defined $h->{rbuf} && $h->{rbuf} eq "") {
-                        delete $h->{rbuf}; $h->{rbuf} = "";
-                    }
-                },
-                on_eof => sub {
-                    my $h = delete $self->{_server_handles}->{$server};
-                    $h->destroy();
-                    undef $h;
-                },
-                on_error => sub {
-                    my $h = delete $self->{_server_handles}->{$server};
-                    $h->destroy();
-                    $self->_connect_one($server) if $self->{auto_reconnect};
-                    undef $h;
-                },
-            );
-
-            $self->_add_active_server( $server, $h );
-            delete $self->{_connect_attempts}->{ $server };
-            $self->protocol->prepare_handle( $fh );
-        }
+        $self->_on_tcp_connect($server, @_);
         $cv->end if $cv;
     };
+}
+
+sub _on_tcp_connect {
+    my ($self, $server, $fh, $host, $port) = @_;
+
+    delete $self->{_is_connecting}->{$server}; # thanks, buddy
+    if (! $fh) {
+        # connect failed
+        warn "failed to connect to $server";
+
+        if ($self->{auto_reconnect} > $self->{_connect_attempts}->{ $server }++) {
+            # XXX this watcher holds a reference to $self, which means
+            # it will make your program wait for it to fire until 
+            # auto_reconnect attempts have been made. 
+            # if you need to close immediately, you need to call disconnect
+            $self->{_reconnect}->{$server} = AE::timer $self->{reconnect_delay}, 0, sub {
+                delete $self->{_reconnect}->{$server};
+                $self->_connect_one($server);
+            };
+        }
+    } else {
+        my $h; $h = AnyEvent::Handle->new(
+            fh => $fh,
+            on_drain => sub {
+                my $h = shift;
+                if (defined $h->{wbuf} && $h->{wbuf} eq "") {
+                    delete $h->{wbuf}; $h->{wbuf} = "";
+                }
+                if (defined $h->{rbuf} && $h->{rbuf} eq "") {
+                    delete $h->{rbuf}; $h->{rbuf} = "";
+                }
+            },
+            on_eof => sub {
+                my $h = delete $self->{_server_handles}->{$server};
+                $h->destroy();
+                undef $h;
+            },
+            on_error => sub {
+                my $h = delete $self->{_server_handles}->{$server};
+                $h->destroy();
+                $self->_connect_one($server) if $self->{auto_reconnect};
+                undef $h;
+            },
+        );
+
+        $self->_add_active_server( $server, $h );
+        delete $self->{_connect_attempts}->{ $server };
+        $self->protocol->prepare_handle( $fh );
+    }
 }
 
 sub _add_active_server {
@@ -362,70 +365,53 @@ sub _prepare_key {
 }
 
 sub _decode_key_value {
-    my ($self, $key, $flags, $data) = @_;
+    my ($self, $key_ref, $flags_ref, $data_ref) = @_;
 
     if (my $ns = $self->{namespace}) {
-        $key =~ s/^$ns//;
+        $$key_ref =~ s/^$ns//;
     }
 
-    if (defined $flags && defined $data) {
-        if ($flags & F_COMPRESS() && HAVE_ZLIB()) {
-            $data = Compress::Zlib::memGunzip($data);
+    if (defined $$flags_ref && defined $$data_ref) {
+        if ($$flags_ref & F_COMPRESS() && HAVE_ZLIB()) {
+            $$data_ref = Compress::Zlib::memGunzip($$data_ref);
         }
-        if ($flags & F_STORABLE()) {
-            $data = Storable::thaw($data);
+        if ($$flags_ref & F_STORABLE()) {
+            $$data_ref = Storable::thaw($$data_ref);
         }
     }
-    return ($key, $data);
-}
-
-sub _decode_key {
-    my ($self, $key) = @_;
-
-    if (my $ns = $self->{namespace}) {
-        $key =~ s/^$ns//;
-    }
-    return $key;
+    return ();
 }
 
 sub _prepare_value {
-    my ($self, $cmd, $value, $exptime) = @_;
+    my ($self, $cmd, $value_ref, $len_ref, $exptime_ref, $flags_ref) = @_;
 
-    my $flags = 0;
-    if (ref $value) {
-        $value = Storable::nfreeze($value);
-        $flags |= F_STORABLE();
+    $$flags_ref = 0;
+    if (ref $$value_ref) {
+        $$value_ref = Storable::nfreeze($$value_ref);
+        $$flags_ref |= F_STORABLE();
     }
 
-    my $len = bytes::length($value);
+    $$len_ref = bytes::length($$value_ref);
     my $threshold = $self->compress_threshold;
     my $compressable = 
         ($cmd ne 'append' && $cmd ne 'prepend') &&
         $threshold && 
         HAVE_ZLIB() &&
-        $len >= $threshold
+        $$len_ref >= $threshold
     ;
+
     if ($compressable) {
-        my $c_val = Compress::Zlib::memGzip($value);
+        my $c_val = Compress::Zlib::memGzip($$value_ref);
         my $c_len = bytes::length($c_val);
 
-        if ($c_len < $len * ( 1 - COMPRESS_SAVINGS() ) ) {
-            $value = $c_val;
-            $len = $c_len;
-            $flags |= F_COMPRESS();
+        if ($c_len < $$len_ref * ( 1 - COMPRESS_SAVINGS() ) ) {
+            $$value_ref = $c_val;
+            $$len_ref   = $c_len;
+            $$flags_ref |= F_COMPRESS();
         }
     }
-    $exptime = int($exptime || 0);
-
-    return ($value, $len, $flags, $exptime);
+    $$exptime_ref = int($$exptime_ref || 0);
 }
-
-sub _modulo_hasher {
-    my ($key, $memcached) = @_;
-    my $count = $memcached->{_active_server_count};
-    return ((String::CRC32::crc32($key) >> 16) & 0x7fff) % $count;
-}
-
 
 1;
 
@@ -629,8 +615,6 @@ Alias to delete
 =over 4
 
 =item Binary stats is not yet implemented.
-
-=item Other hashing mechanisms. Consistent Hashing (patches welcome)
 
 =back
 

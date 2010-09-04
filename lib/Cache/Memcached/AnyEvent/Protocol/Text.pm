@@ -67,9 +67,10 @@ sub get {
         if ($line =~ /^VALUE (\S+) (\S+) (\S+)(?: (\S+))?/)  {
             my ($rkey, $rflags, $rsize, $rcas) = ($1, $2, $3, $4);
             $handle->push_read(chunk => $rsize, sub {
-                my ($key, $data) = $memcached->_decode_key_value($rkey, $rflags, $_[1]);
+                my $value = $_[1];
+                $memcached->_decode_key_value(\$rkey, \$rflags, \$value);
                 $handle->push_read(regex => qr{END\r\n}, cb => sub {
-                    $cb->( $data );
+                    $cb->( $value );
                     undef $guard;
                 } );
             });
@@ -94,7 +95,6 @@ sub get_multi {
         return;
     }
 
-    my $count = $memcached->{_active_server_count};
     my %keysinserver;
     foreach my $key (@$keys) {
         my $fq_key = $memcached->_prepare_key( $key );
@@ -119,8 +119,9 @@ sub get_multi {
             } elsif ($line =~ /^VALUE (\S+) (\S+) (\S+)(?: (\S+))?/)  {
                 my ($rkey, $rflags, $rsize, $rcas) = ($1, $2, $3, $4);
                 $handle->push_read(chunk => $rsize, sub {
-                    my ($key, $data) = $memcached->_decode_key_value($rkey, $rflags, $_[1]);
-                    $rv{ $key } = $data; # XXX whatabout CAS?
+                    my $value = $_[1];
+                    $memcached->_decode_key_value(\$rkey, \$rflags, \$value);
+                    $rv{ $rkey } = $value; # XXX whatabout CAS?
                     $handle->push_read(regex => qr{\r\n}, cb => sub { "noop" });
                     $handle->push_read(line => $code);
                 } );
@@ -138,13 +139,13 @@ sub get_multi {
     my $generator = sub {
         my $cmd = shift;
         sub {
-            my ($self, $guard, $memcached, $key, $value, $exptime, $noreply, $cb) = @_;
+            my ($self, $guard, $memcached, $key, $value, $expires, $noreply, $cb) = @_;
             my $fq_key = $memcached->_prepare_key( $key );
             my $handle = $memcached->_get_handle_for( $fq_key );
+            my ($len, $flags);
 
-            my ($write_data, $write_len, $flags, $expires) =
-                $memcached->_prepare_value( $cmd, $value, $exptime );
-            $handle->push_write("$cmd $fq_key $flags $expires $write_len\r\n$write_data\r\n");
+            $memcached->_prepare_value( $cmd, \$value, \$len, \$expires, \$flags );
+            $handle->push_write("$cmd $fq_key $flags $expires $len\r\n$value\r\n");
             if (! $noreply) {
                 $handle->push_read(regex => qr{^(NOT_)?STORED\r\n}, sub {
                     undef $guard;
