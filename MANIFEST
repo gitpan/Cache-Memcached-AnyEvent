@@ -23,6 +23,7 @@ README
 t/000_compile.t
 t/Cache/Memcached/AnyEvent/Test.pm
 t/CMAETest/Commands.pm
+t/CMAETest/Consistency.pm
 t/CMAETest/ConnectFail.pm
 t/CMAETest/CV.pm
 t/CMAETest/Dorman.pm
