@@ -16,18 +16,24 @@ lib/Cache/Memcached/AnyEvent/Protocol/Binary.pm
 lib/Cache/Memcached/AnyEvent/Protocol/Text.pm
 lib/Cache/Memcached/AnyEvent/Selector/Ketama.pm
 lib/Cache/Memcached/AnyEvent/Selector/Traditional.pm
+Makefile
 Makefile.PL
 MANIFEST			This list of files
+MANIFEST.SKIP
 META.yml
+MYMETA.json
+MYMETA.yml
+pm_to_blib
 README
 t/000_compile.t
 t/Cache/Memcached/AnyEvent/Test.pm
 t/CMAETest/Commands.pm
-t/CMAETest/Consistency.pm
 t/CMAETest/ConnectFail.pm
+t/CMAETest/Consistency.pm
 t/CMAETest/CV.pm
 t/CMAETest/Dorman.pm
 t/CMAETest/Stats.pm
+t/memcached.log
 t/run.t
 tools/benchmark.pl
 xt/01_compat.t

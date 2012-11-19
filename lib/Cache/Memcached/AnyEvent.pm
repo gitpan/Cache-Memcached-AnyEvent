@@ -12,6 +12,7 @@ use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Carp;
 use Storable ();
+use Scalar::Util ();
 
 use constant +{
     HAVE_ZLIB => eval { require Compress::Zlib; 1 },
@@ -20,7 +21,7 @@ use constant +{
     COMPRESS_SAVINGS => 0.20,
 };
 
-our $VERSION = '0.00020';
+our $VERSION = '0.00021';
 
 sub new {
     my $class = shift;
@@ -72,7 +73,7 @@ sub _build_helper {
 }
 
 BEGIN {
-    foreach my $attr qw(auto_reconnect compress_threshold reconnect_delay servers namespace) {
+    foreach my $attr ( qw(auto_reconnect compress_threshold reconnect_delay servers namespace) ) {
         eval <<EOSUB;
             sub $attr {
                 my \$self = shift;
@@ -235,6 +236,7 @@ sub get_handle { shift->{_server_handles}->{ $_[0] } }
     foreach my $method ( qw( get get_multi ) ) {
         $installer->( $method, sub {
             my ($self, $keys, $cb) = @_;
+            Scalar::Util::weaken($self);
             $self->_push_queue( $self->protocol->$method($self, $keys, $cb) );
         } );
     }
@@ -244,6 +246,7 @@ sub get_handle { shift->{_server_handles}->{ $_[0] } }
             my ($self, @args) = @_;
             my $cb = pop @args if (ref $args[-1] eq 'CODE' or ref $args[-1] eq 'AnyEvent::CondVar');
             my ($key, $value, $initial) = @args;
+            Scalar::Util::weaken($self);
             $self->_push_queue( $self->protocol->$method( $self, $key, $value, $initial, $cb ) );
         });
     }
@@ -253,6 +256,7 @@ sub get_handle { shift->{_server_handles}->{ $_[0] } }
             my ($self, @args) = @_;
             my $cb = pop @args if (ref $args[-1] eq 'CODE' or ref $args[-1] eq 'AnyEvent::CondVar');
             my ($key, $value, $exptime, $noreply) = @args;
+            Scalar::Util::weaken($self);
             $self->_push_queue( $self->protocol->$method( $self, $key, $value, $exptime, $noreply, $cb ) );
         });
     }
@@ -612,7 +616,7 @@ Contribution is welcome, but please make sure to follow this guideline:
 =item Please send changes AND tests.
 
 In case of changes that supposedly fixes incorrect behavior, you MUST provide
-me with a E<failing test case>. How should we know if you were hallucinating or just plain stupid if you can't reproduce it yourself?
+me with a B<failing test case>. How should we know if you were hallucinating or just plain stupid if you can't reproduce it yourself?
 
 =item Please send code, not an essay.
 

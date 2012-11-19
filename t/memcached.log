@@ -1,0 +1,10 @@
+Executing /usr/local/bin/memcached -v -p 10001 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10003 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10004 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10005 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10006 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10001 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10003 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10004 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10005 -l 127.0.0.1
+Executing /usr/local/bin/memcached -v -p 10006 -l 127.0.0.1
