@@ -1,13 +1,13 @@
 use strict;
 use Test::More;
 use Test::Memcached;
-use Test::Requires;
-use t::CMAETest::Consistency;
-use t::CMAETest::Commands;
-use t::CMAETest::ConnectFail;
-use t::CMAETest::CV;
-use t::CMAETest::Dorman;
-use t::CMAETest::Stats;
+use Module::Runtime;
+use constant HAVE_KETAMA => eval { require Algorithm::ConsistentHash::Ketama } || 0;
+use constant HAVE_JSON => 
+    eval { require JSON } ||
+    eval { require JSON::XS } ||
+    eval { require JSON::PP } || 0;
+use constant HAVE_MESSAGE_PACK => eval { require Data::MessagePack } || 0;
 
 my @memd;
 if ( ! $ENV{PERL_ANYEVENT_MEMCACHED_SERVERS}) {
@@ -39,16 +39,50 @@ if ( ! $ENV{PERL_ANYEVENT_MEMCACHED_SERVERS}) {
     );
 }
 
-foreach my $protocol ( qw(Text Binary) ) {
-    foreach my $selector ( qw(Traditional Ketama) ) {
-        foreach my $pkg ( qw( t::CMAETest::Commands t::CMAETest::ConnectFail t::CMAETest::CV t::CMAETest::Dorman t::CMAETest::Stats t::CMAETest::Consistency) ) {
-            note "running $pkg test [$protocol/$selector]";
-            subtest "$pkg [$protocol/$selector]" => sub {
-                if ( $selector eq 'Ketama' ) {
-                    Test::Requires->import( 'Algorithm::ConsistentHash::Ketama' );
-                }
-                $pkg->run( $protocol, $selector );
-            };
+my @protocols   = qw(Text Binary);
+my @selectors   = qw(Traditional Ketama);
+my @serializers = qw(Storable JSON MessagePack);
+my @tests     = qw(
+    t::CMAETest::Commands
+    t::CMAETest::ConnectFail
+    t::CMAETest::CV
+    t::CMAETest::Dorman
+    t::CMAETest::Stats
+    t::CMAETest::Consistency
+);
+
+my %HAVE_SELECTORS = (
+    Traditional => 1,
+    Ketama      => HAVE_KETAMA,
+);
+my %HAVE_SERIALIZERS = (
+    Storable    => 1,
+    JSON        => HAVE_JSON,
+    MessagePack => HAVE_MESSAGE_PACK,
+);
+
+foreach my $protocol (@protocols) {
+    foreach my $selector (@selectors) {
+        foreach my $serializer (@serializers) {
+            foreach my $pkg (@tests) {
+                note "running $pkg test [$protocol/$selector/$serializer]";
+                Module::Runtime::require_module($pkg);
+                subtest "$pkg [$protocol/$selector]" => sub {
+                    SKIP: {
+                        if (! $HAVE_SELECTORS{ $selector }) {
+                            skip("Test $pkg [$protocol/$selector/$serializer] skipped (selector $selector not available)", 1);
+                        }
+                        if (! $HAVE_SERIALIZERS{ $serializer }) {
+                            skip("Test $pkg [$protocol/$selector/$serializer] skipped (serializer $serializer not available)", 1);
+                        }
+                        
+                        if ( ! $pkg->should_run) {
+                            skip("Test $pkg [$protocol/$selector/$serializer] skipped", 1);
+                        }
+                        $pkg->run( $protocol, $selector, $serializer );
+                    };
+                };
+            }
         }
     }
 }

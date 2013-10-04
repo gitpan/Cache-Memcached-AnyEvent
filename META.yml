@@ -4,15 +4,16 @@ author:
   - 'Daisuke Maki C<< <daisuke@endeworks.jp> >>'
 build_requires:
   ExtUtils::MakeMaker: 6.36
-  Test::Exception: 0
+  Test::Fatal: 0
   Test::Memcached: 0.00003
   Test::More: 0.94
   Test::Requires: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.36
-distribution_type: module
-dynamic_config: 1
-generated_by: 'Module::Install version 1.06'
+  CPAN::Meta: 0
+  CPAN::Meta::Prereqs: 0
+  Module::Build: 0.38
+dynamic_config: 0
+generated_by: 'Minilla/v0.7.2, CPAN::Meta::Converter version 2.132140'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -20,19 +21,51 @@ meta-spec:
 name: Cache-Memcached-AnyEvent
 no_index:
   directory:
-    - inc
     - t
     - xt
+    - inc
+    - share
+    - eg
+    - examples
+    - author
+provides:
+  Cache::Memcached::AnyEvent:
+    file: lib/Cache/Memcached/AnyEvent.pm
+    version: 0.00022
+  Cache::Memcached::AnyEvent::Protocol:
+    file: lib/Cache/Memcached/AnyEvent/Protocol.pm
+  Cache::Memcached::AnyEvent::Protocol::Binary:
+    file: lib/Cache/Memcached/AnyEvent/Protocol/Binary.pm
+  Cache::Memcached::AnyEvent::Protocol::Text:
+    file: lib/Cache/Memcached/AnyEvent/Protocol/Text.pm
+  Cache::Memcached::AnyEvent::Selector::Ketama:
+    file: lib/Cache/Memcached/AnyEvent/Selector/Ketama.pm
+  Cache::Memcached::AnyEvent::Selector::Traditional:
+    file: lib/Cache/Memcached/AnyEvent/Selector/Traditional.pm
+  Cache::Memcached::AnyEvent::Serializer::JSON:
+    file: lib/Cache/Memcached/AnyEvent/Serializer/JSON.pm
+  Cache::Memcached::AnyEvent::Serializer::MessagePack:
+    file: lib/Cache/Memcached/AnyEvent/Serializer/MessagePack.pm
+  Cache::Memcached::AnyEvent::Serializer::Storable:
+    file: lib/Cache/Memcached/AnyEvent/Serializer/Storable.pm
 recommends:
   Compress::Zlib: 0
 requires:
   AnyEvent: 0
   AnyEvent::Handle: 0
   AnyEvent::Socket: 0
+  Class::Accessor::Lite: 0
+  Module::Runtime: 0
   Storable: 0
   String::CRC32: 0
   Task::Weaken: 0
 resources:
-  license: http://dev.perl.org/licenses/
+  bugtracker: https://github.com/lestrrat/Cache-Memcached-AnyEvent/issues
+  homepage: https://github.com/lestrrat/Cache-Memcached-AnyEvent
   repository: git://github.com/lestrrat/Cache-Memcached-AnyEvent.git
-version: 0.00021
+version: 0.00022
+x_contributors:
+  - 'Michael Alan Dorman <mdorman@ironicdesign.com>'
+  - 'Thomas Szukala <schuk@abusix.org>'
+  - 'Sawyer X <xsawyerx@cpan.org>'
+  - 'Daisuke Maki <lestrrat+github@gmail.com>'

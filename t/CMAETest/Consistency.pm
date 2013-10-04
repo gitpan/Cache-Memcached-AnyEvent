@@ -2,23 +2,33 @@ package t::CMAETest::Consistency;
 use strict;
 use AnyEvent;
 use Test::More;
-use Test::Requires;
-use t::Cache::Memcached::AnyEvent::Test;
+use t::Util;
+use constant HAVE_CACHE_MEMCACHED => eval {
+    require Cache::Memcached;
+};
+
+sub should_run {
+    return HAVE_CACHE_MEMCACHED;
+}
 
 sub run {
     my ($self, $protocol, $selector) = @_;
 
-    Test::Requires->import( 'Cache::Memcached' );
     SKIP: {
-        skip "Can't test with Ketama", 26;
-
+        if ($selector eq 'Ketama') {
+warn "Skip because of Ketama";
+            skip("Can't test with Ketama", 26);
+        }
         my $memd_anyevent = test_client(protocol_class => $protocol, selector_class => $selector);
+use Data::Dumper;
+warn Dumper($memd_anyevent);
         my $memd = Cache::Memcached->new({
             servers => [ test_servers() ],
             namespace => $memd_anyevent->{namespace},
         });
 
-        my @keys = map { "consistency_$_" } ('a'..'z');
+        my $key  = random_key();
+        my @keys = map { "$key.$_" } ('a'..'z');
         $memd->flush_all;
         foreach my $key (@keys) {
             $memd->set($key, $key);
@@ -34,6 +44,7 @@ sub run {
         });
 
         $cv->recv;
+        $memd_anyevent->disconnect;
     }
     done_testing;
 }

@@ -1,11 +1,11 @@
 package t::CMAETest::Commands;
 use strict;
 use AnyEvent::Impl::Perl;
-use t::Cache::Memcached::AnyEvent::Test;
+use t::Util;
 use Test::More;
-use Test::Exception;
+use Test::Fatal;
 
-my $key = 'CMAETest.' . int(rand(1000));
+my $key = random_key();
 my @keys = map { "commands-$_" } (1..10);
 my @callbacks = (
     sub { my ($memd, $cv) = @_; $memd->flush_all(sub { is($_[0], 1, 'Flush all records'); $cv->end }); },
@@ -131,12 +131,13 @@ my @callbacks = (
     sub { my ($memd, $cv) = @_; $memd->get($key, sub { ok(!$_[0], "Get on existing value fails after flush_all"); $cv->end }) },
 );
 
+sub should_run { 1 }
 sub run {
-    my ($pkg, $protocol, $selector) = @_;
+    my ($pkg, $protocol, $selector, $serializer) = @_;
 
-    lives_ok {
+    is exception {
         my $cv = AE::cv;
-        my $memd = test_client(protocol_class => $protocol, selector_class => $selector);
+        my $memd = test_client(protocol_class => $protocol, selector_class => $selector, serializer_class => $serializer);
 
         isa_ok $memd->selector, "Cache::Memcached::AnyEvent::Selector::$selector";
         isa_ok $memd->protocol, "Cache::Memcached::AnyEvent::Protocol::$protocol";
@@ -163,7 +164,9 @@ sub run {
             }
         }
         $cv->recv;
-    } "Command tests ran fine";
+
+        $memd->disconnect;
+    }, undef, "Command tests ran fine";
     done_testing;
 }
 

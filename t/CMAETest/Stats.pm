@@ -1,7 +1,8 @@
 package t::CMAETest::Stats;
 use strict;
-use t::Cache::Memcached::AnyEvent::Test;
+use t::Util;
 
+sub should_run { 1 }
 sub run {
     my ( $pkg, $protocol, $selector) = @_;
 

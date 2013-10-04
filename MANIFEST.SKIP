@@ -1,6 +1,0 @@
-^\.
-^blib
-^extlib
-^Cache-Memcached-AnyEvent-
-\.bak$
-TRAVIS.PL
